@@ -240,7 +240,7 @@ terminal position.
 The `is_valid` method will determine if playing in File f is possible. That
 is, if there enough space left in that file.
 
-= Position Evaluation
+= Position Evaluation <peval>
 Given that we will not be exploring the whole decision tree, we will have to
 define a _heuristic_ function. That is, a _good enough_ approximation to the
 true value of a position. It is a strategy used to reduce the search space of
@@ -297,6 +297,54 @@ The reason why this works is because of carry-over's when performing the sum.
 This each file has 1's for each occupied position, adding a 1 will set every
 bit to 0 except the smallest index where a 0 is found.
 
+An optimization can be done when generating movements. Namely, we only consider
+moves which do not lead to an immediately losing position. That is, if there is
+a threat from the opponent, we only consider the move which blocks the threat.
+If every move results in an immediate loss, we return no movements.
+
+=== Examples
+If we have the following position:
+#figure(
+  image("boards/mvgen2.svg", width: 6cm),
+  caption: [],
+)<mvgen2>
+Yellow is to move. Since they have no immediate wins, we search for red's
+immediate wins. Since they have none, the corresponding bitboard with 
+moves to be considered is given by
+
+#figure(
+  ```
+  .  .  .  .  .  .  .
+  0  0  0  0  0  0  0
+  0  0  0  0  0  0  0
+  0  1  0  0  0  0  0
+  1  0  0  0  0  0  0
+  0  0  0  0  0  0  0
+  0  0  1  1  1  1  1
+  ```,
+  caption: [Mask of the non-losing moves from position @mvgen2.],
+)
+#figure(
+  image("boards/mvgen1.svg", width: 6cm),
+  caption: [Example position for move generation.],
+)<mvgen1>
+
+Yellow has the next move. Since yellow has no immediate wins, his only move to
+consider will be A1. Every other move results in red winning in their turn.
+Therefore, the bitboard containing the moves to be considered is given by
+
+#figure(
+  ```
+  .  .  .  .  .  .  .
+  0  0  0  0  0  0  0
+  0  0  0  0  0  0  0
+  1  0  0  0  0  0  0
+  0  0  0  0  0  0  0
+  0  0  0  0  0  0  0
+  0  0  0  0  0  0  0
+  ```,
+  caption: [Mask of the non-losing moves from position @mvgen1.],
+)
 
 = Search Algorithm
 == Minimax
@@ -310,16 +358,26 @@ theirs, this minimizing ours. This is known as the _minimax_ algorithm.
 As mentioned before, it is not feasible to do a whole search of the tree.
 Therefore, we will use a _heuristic_ to evaluate a certain position, despite
 not knowing the exact outcome of said position, assuming perfect play from both
-players.
+players. Refer to @peval for a detailed explanation on how evaluations are
+done.
 == Negamax
 The _negamax_ variant of minimax assumes that the score of one player is the
 negative of their own. Therefore, it becomes redundant to differentiate between
-Player 1 and Player 2, so we may only focus on maximizing the score
-of the current player's move.
+Player 1 and Player 2, so we may only focus on maximizing the score of the
+current player's move.
+=== Alpha-Beta pruning
+On its own, Negamax would search the whole position variation tree. However,
+this algorithm alone does not use the information from sibling nodes. That is,
+it searches the tree exhausltivaley, even if the best theoretical move ---given a
+certain depth--- has already been found in the first few iterations.
 
-#theorem[The Riemann hypothesis is true.] <thm>
-
-#proof[This is left as an exercise to the reader, given the complexity of the theorem.]
-
-= Background
-#lorem(40)
+The alpha-beta pruning variation of the negamax search algorithm uses 2 extra
+variables at each node of the search tree. One describes the score of the best
+move the opponent can make, and the other contains the score of the best move
+you can make. These always start off at the worst posssible values ($infinity$
+and $-infinity$). Once the maximum depht of the negamax algorithm has been
+reached, an evaluation is given, and a value is updated correspondingly. This
+value propagates upwards, and subsequent node searches will compare these newly
+set alpha-beta values to determine if searching that particular branch can
+yield a better score for the root node. If not, the branch is completely ignored,
+saving computational time.
