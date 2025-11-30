@@ -1,13 +1,18 @@
 #import "@preview/unequivocal-ams:0.1.2": ams-article, proof, theorem
+#import "@preview/algorithmic:1.0.7"
+#import "@preview/wrap-it:0.1.1": wrap-content
+#import "@preview/fletcher:0.5.8" as fletcher: diagram, edge, node
 
+#import algorithmic: algorithm-figure, style-algorithm
+#show: style-algorithm
+#show figure.caption: set text(size: 8pt)
 #show: ams-article.with(
-  title: [Connect Four],
+  title: [Iterative Negamax in Connect Four],
   authors: (
     (
       name: "Pedro D. Llerenas",
       department: [Maestria en Ciencias de la Computacion],
       organization: [Centro de Investigacion en Matematicas],
-      location: [Tennessee, TN 59341],
       email: "pedro.llerenas@cimat.mx",
       url: "https://github.com/pdllerenas/ConnectFour",
     ),
@@ -19,10 +24,25 @@
 
 = Introduction
 In this article, we present an implementation of a move searching bot for the
-game Connect Four$trademark$ in `C++`. We use bitboards for the representation
+game Connect Four$trademark.registered$ by Hasbro in `C++`. We use bitboards for the representation
 of the $6 times 7$ board, and perform tree searches using the Negamax algorithm
 with alpha-beta pruning. Moreover, we accomplish this non-recursively, which
 allows for better memory management.
+
+This article does not cover optimal strategies. If one wishes to truly
+understand how play with perfect strategy, refer to @Allen_ConnectFour_Web. It
+is also important to note that this game has been solved, meaning that every
+possible position has a determined outcome, assuming optimal play from both
+players. This was first done by James Dow Allen (as mentioned in
+@Allen_ConnectFour_Web), and independently by Victor Allis in 1988. These
+solutions used knowledge databases, as computers back then were not powerful
+enough to brute force the solution. One key takeaways is that with perfect
+play, Player 1 can always win by placing the first chip in the center.
+
+Once computational power was enough, John Tromp @JTromp_Web used about 40,000
+computational hours to solve any 8-ply position.
+
+More improvements on the solving algorithm can be explored in @PPons.
 
 = Preliminaries
 In this section, we present (almost) every data structure and algorithm needed
@@ -82,7 +102,7 @@ color are connected diagonally, vertically, or horizontally. For example:
 ) <terminal1>
 
 == Bitboards
-Bitboards are board representations relying solely on bits. More precisely,
+Bitboards are board representations relying solely on bits @CP_Bitboards. More precisely,
 each of the $6 times 7 = 42$ spaces in the Connect Four board are represented
 by a single bit (this attains the value of 0 or 1) of information. In `C++`,
 the data type `uint64_t` is an unsigned integer with 64 bits of capacity. Since
@@ -98,12 +118,12 @@ bitboard. Moreover, accessing a single bit from a `uint64_t` is requires at most
 2 machine instructions:
 - 1 bit shift,
 - 1 AND (&) operation.
-On the other hand, accessing an array requires pointer arithmatic and loading
+On the other hand, accessing an array requires pointer arithmetic and loading
 the memory. If not cached, the accessing becomes orders of magnitude slower.
 
 === Board representation
 In our hardware, all 64 bits are contiguous. However, we use a certain
-rearragement in order to make visualization easier. The following arrangement
+rearrangement in order to make visualization easier. The following arrangement
 will be assumed henceforth.
 
 #figure(
@@ -131,9 +151,9 @@ it is possible to recover the opponents board from the following operation:
 #figure(```
 opponent = current ^ occupied.
 ```)
-An altarnative is to store Player 1 and Player 2 chips. However, spaces
+An alternative is to store Player 1 and Player 2 chips. However, spaces
 occupied by both will be revealed to be more useful later on, and thus required
-less total opreations.
+less total operations.
 === Example
 As an example, we will represent what @terminal1 would look like in terms of
 bitboards:
@@ -179,7 +199,7 @@ Therefore, if we perform an XOR operation of these boards, we arrive to
   0  0  1  0  0  0  0
   0  1  1  0  0  0  0
   ```,
-  caption: [XOR operation of previous boards. This is preciesly the
+  caption: [XOR operation of previous boards. This is precisely the
     representation of Player 2's chips.],
 )
 
@@ -212,24 +232,27 @@ the best possible move depending on the information found.
 
 = Storing a Position
 Earlier we discussed the usage of bitboards to represent a position. Given that
-we will be storing multiple positions at a time, it is convinient to use `C++`
+we will be storing multiple positions at a time, it is convenient to use
 classes to encapsulate each position. The usage of classes will also improve
 the readability of our code, as class methods allow us to operate over a
 particular position.
 
 The Position class will be (roughly) defined as follows:
-```cpp
-class Position {
-  private:
-    Bitboard currentPieces;
-    Bitbaord bothPieces;
-    uint8_t ply;
-  public:
-    void play(File f);
-    bool is_winning_move(File f) const;
-    bool is_valid(File f) const;
-};
-```
+#figure(
+  ```cpp
+  class Position {
+    private:
+      Bitboard currentPieces;
+      Bitbaord bothPieces;
+      uint8_t ply;
+    public:
+      void play(File f);
+      bool is_winning_move(File f) const;
+      bool is_valid(File f) const;
+  };
+  ```,
+  caption: [Snippet of the position class.],
+)
 The `ply` property simply keeps track of the move number (counting half moves)
 of that board. Note that this is equivalent to the number of chips present in
 the board.
@@ -252,21 +275,29 @@ true outcome.
 A _terminal position_ is one where a 4-connection has been made (see
 @terminal1). We will score this as 32000, and it will be the highest possible
 score attainable by a player.
-
-== Threats
-A _threat_ is a pattern where only one same colored chip is missing. We will
-score threats with a value of 1000.
-For example,
+== Mate in 1
+A mate in 1 is classified as a position where the player can win in the next
+move. This will also be scored as 32000, as it is equivalent to a terminal
+state or it is known to be a terminal state before performing the move.
 #figure(
   image("boards/threat1.svg", width: 6cm),
-  caption: [Board with threats from both players.],
+  caption: [Red to play, can win in A4],
 )
-In this position, red is to move. The threat by red here is the space A4, while
-the threat for yellow is A4 and E1. However, since it is red to move, yellow's
-threats mean nothing, as red wins in the next move.
+
+== Threats
+A _threat_ is a pattern where only one same colored chip is missing, but an
+immediate win is not necessarily present. These have a weight of 1000.
+=== Examples
+#figure(
+  image("boards/threat2.svg", width: 6cm),
+  caption: [Red to play. Board with threats from both players, but red cannot
+    win in the next move.],
+)
+In the previous example, red has the threat of D4, while yellow has the threat
+of A4. Notice that neither A1 or E1 will count, as they are already blocked.
 
 == Center Control
-Similar to chess, having control over the center creates a big advatage. In our
+Similar to chess, having control over the center creates a big advantage. In our
 case, we may use the center file to create connections from both sides of the
 board. Therefore, we will reward the player that uses the files close to the
 center, as this heuristically allows for more winning positions. We score each
@@ -309,7 +340,7 @@ If we have the following position:
   caption: [],
 )<mvgen2>
 Yellow is to move. Since they have no immediate wins, we search for red's
-immediate wins. Since they have none, the corresponding bitboard with 
+immediate wins. Since they have none, the corresponding bitboard with
 moves to be considered is given by
 
 #figure(
@@ -368,16 +399,513 @@ current player's move.
 === Alpha-Beta pruning
 On its own, Negamax would search the whole position variation tree. However,
 this algorithm alone does not use the information from sibling nodes. That is,
-it searches the tree exhausltivaley, even if the best theoretical move ---given a
+it searches the tree exhaustively, even if the best theoretical move ---given a
 certain depth--- has already been found in the first few iterations.
 
 The alpha-beta pruning variation of the negamax search algorithm uses 2 extra
 variables at each node of the search tree. One describes the score of the best
 move the opponent can make, and the other contains the score of the best move
-you can make. These always start off at the worst posssible values ($infinity$
-and $-infinity$). Once the maximum depht of the negamax algorithm has been
+you can make. These always start off at the worst possible values ($infinity$
+and $-infinity$). Once the maximum deft of the negamax algorithm has been
 reached, an evaluation is given, and a value is updated correspondingly. This
 value propagates upwards, and subsequent node searches will compare these newly
 set alpha-beta values to determine if searching that particular branch can
 yield a better score for the root node. If not, the branch is completely ignored,
 saving computational time.
+
+According to @CP_AlphaBeta, the time complexity of Negamax with alpha-beta
+pruning is $cal(O)(7^(d/2))$ when considering the best move first.
+
+#let fill-red = gradient.radial(red.lighten(90%), red, center: (30%, 20%), radius: 80%)
+#let fill-yellow = gradient.radial(yellow.lighten(90%), yellow, center: (30%, 20%), radius: 80%)
+
+#{
+  set text(8pt)
+  figure(
+    diagram(
+      node-stroke: .1em,
+      spacing: 2.5em,
+      node((0, 0), $-infinity$, radius: 1.5em, fill: fill-red),
+      node((-0.25, -0.25), $infinity$, radius: 0.9em, fill: fill-red),
+
+      edge((0, 0), (-3, 1), `A`, "-", label-pos: 90%),
+      edge((0, 0), (-2, 1), `B`, "-", label-pos: 90%),
+      edge((0, 0), (-1, 1), `C`, "-", label-pos: 90%),
+      edge((0, 0), (-0, 1), `D`, "-", label-pos: 50%),
+      edge((0, 0), (1, 1), `E`, "-", label-pos: 70%),
+      edge((0, 0), (2, 1), `F`, "-", label-pos: 80%),
+      edge((0, 0), (3, 1), `G`, "-", label-pos: 80%),
+
+      node((-3, 1), `0`, radius: 1.5em, fill: fill-yellow),
+
+      node((-2, 1), `0`, radius: 1.5em, fill: fill-yellow),
+
+      node((-1, 1), `0`, radius: 1.5em, fill: fill-yellow),
+
+      node((-0, 1), `10`, radius: 1.5em, fill: fill-yellow),
+
+      node((1, 1), `0`, radius: 1.5em, fill: fill-yellow),
+
+      node((2, 1), `0`, radius: 1.5em, fill: fill-yellow),
+
+      node((3, 1), `0`, radius: 1.5em, fill: fill-yellow),
+    ),
+    caption: [Negamax algorithm with depth 1 as a tree. The color indicates whose turn it is
+      to move. The root node is the empty board. The big node denotes $alpha$,
+      and the small node represents $beta$. The root node is always initialized
+      with $beta=infinity$ and $alpha = -infinity$. The yellow nodes are updated
+      when the static evaluation is greater than $alpha$, which in this case any
+      number is greater than $-infinity$.],
+  )
+}
+
+#{
+  set text(8pt)
+  figure(
+    diagram(
+      node-stroke: .1em,
+      spacing: 2.5em,
+      node((0, 0), $10$, radius: 1.5em, fill: fill-red),
+      node((-0.25, -0.25), $infinity$, radius: 0.9em, fill: fill-red),
+
+      edge((0, 0), (-3, 1), `A`, "-", label-pos: 90%),
+      edge((0, 0), (-2, 1), `B`, "-", label-pos: 90%),
+      edge((0, 0), (-1, 1), `C`, "-", label-pos: 90%),
+      edge((0, 0), (-0, 1), `D`, "-", label-pos: 50%),
+      edge((0, 0), (1, 1), `E`, "-", label-pos: 70%),
+      edge((0, 0), (2, 1), `F`, "-", label-pos: 80%),
+      edge((0, 0), (3, 1), `G`, "-", label-pos: 80%),
+
+      node((-3, 1), `0`, radius: 1.5em, fill: fill-yellow),
+
+      node((-2, 1), `0`, radius: 1.5em, fill: fill-yellow),
+
+      node((-1, 1), `0`, radius: 1.5em, fill: fill-yellow),
+
+      node((-0, 1), `10`, radius: 1.5em, fill: fill-yellow),
+
+      node((1, 1), `0`, radius: 1.5em, fill: fill-yellow),
+
+      node((2, 1), `0`, radius: 1.5em, fill: fill-yellow),
+
+      node((3, 1), `0`, radius: 1.5em, fill: fill-yellow),
+    ),
+    caption: [Root of the tree is updated with the best evaluation found. The best move is file D.],
+  )
+}
+In this previous example, it can be seen that due to our evaluation function,
+the center is generally preferred. Therefore, if we reorder our moves in a way
+that the _heuristically_ best nodes are searched first, we can update its
+parent node faster, and the information can be shared with the following
+explored nodes.
+#{
+  set text(8pt)
+  figure(
+    diagram(
+      node-stroke: .1em,
+      spacing: 2.5em,
+      node((0, 0), $10$, radius: 1.5em, fill: fill-red),
+      node((-0.25, -0.25), $infinity$, radius: 0.9em, fill: fill-red),
+
+      edge((0, 0), (-3, 1), `D`, "-", label-pos: 90%),
+      edge((0, 0), (-2, 1), `E`, "-", label-pos: 90%),
+      edge((0, 0), (-1, 1), `C`, "-", label-pos: 90%),
+      edge((0, 0), (-0, 1), `F`, "-", label-pos: 50%),
+      edge((0, 0), (1, 1), `B`, "-", label-pos: 70%),
+      edge((0, 0), (2, 1), `G`, "-", label-pos: 80%),
+      edge((0, 0), (3, 1), `A`, "-", label-pos: 80%),
+
+      node((-3, 1), `10`, radius: 1.5em, fill: fill-yellow),
+
+      node((-2, 1), `0`, radius: 1.5em, fill: fill-yellow),
+
+      node((-1, 1), `0`, radius: 1.5em, fill: fill-yellow),
+
+      node((-0, 1), `0`, radius: 1.5em, fill: fill-yellow),
+
+      node((1, 1), `0`, radius: 1.5em, fill: fill-yellow),
+
+      node((2, 1), `0`, radius: 1.5em, fill: fill-yellow),
+
+      node((3, 1), `0`, radius: 1.5em, fill: fill-yellow),
+    ),
+    caption: [Moves ordered from _best_ to _worst_. The value of $alpha$ for
+      the root node is immediately set to 10 after the first node visit, compared
+      to it being updated only 4 nodes in for the first move arrangement.],
+  )
+}
+There is no pruning done in the previous example because it is of depth 1. The
+following example is for demonstration purposes only; the values do not reflect
+a real game.
+
+// @typstyle off
+#{
+  set text(8pt)
+  figure(
+    diagram(
+      node-stroke: .1em,
+      spacing: 2.5em,
+      node((0, 0), $7$, radius: 1.5em, fill: fill-red),
+      node((-0.25, -0.25), $infinity$, radius: 0.9em, fill: fill-red),
+
+      edge((0, 0), (-3, 1), `D`, "-", label-pos: 90%),
+      edge((0, 0), (-1, 1), `E`, "-", label-pos: 90%),
+      edge((0, 0), (1, 1), `C`, "-", label-pos: 60%),
+      edge((0, 0), (3, 1), `F`, "-", label-pos: 80%),
+
+      edge((0, 0), (-1, 1), `E`, "-", label-pos: 90%),
+      edge((0, 0), (1, 1), `C`, "-", label-pos: 60%),
+      edge((0, 0), (3, 1), `F`, "-", label-pos: 80%),
+
+      node((-3, 1), $7$, radius: 1.5em, fill: fill-yellow),
+      node((-3.25, 0.75), $infinity$ , radius: 0.9em, fill: fill-yellow),
+
+        edge((-3, 1), (-3.5, 2), `D`, "-", label-pos: 90%),
+
+        node((-3.5, 2), $-10$, radius: 1.5em, fill: fill-red),
+        node((-3.75, 1.75), $infinity$ , radius: 0.9em, fill: fill-red),
+
+          edge((-3.5, 2), (-4, 3), `C`, "-", label-pos: 90%),
+          node((-4, 3), $10$, radius: 1.5em, fill: fill-yellow),
+
+          edge((-3.5, 2), (-3, 3), `B`, "-", label-pos: 90%),
+          node((-3, 3), $8$, radius: 1.5em, fill: fill-yellow),
+
+        edge((-3, 1), (-2.5, 2), `C`, "-", label-pos: 90%),
+
+        node((-2.5, 2), $-7$, radius: 1.5em, fill: fill-red),
+
+      node((-1, 1), $-infinity$ , radius: 1.5em, fill: fill-yellow),
+      node((-1.25, 0.75), $-7$ , radius: 0.9em, fill: fill-yellow),
+
+        edge((-1, 1), (-1.5, 2), `D`, "-", label-pos: 90%),
+
+        node((-1.5, 2), $7$, radius: 1.5em, fill: fill-red),
+        node((-1.75, 1.75), $infinity$ , radius: 0.9em, fill: fill-red),
+
+          edge((-1.5, 2), (-2, 3), `C`, "-", label-pos: 90%),
+          node((-2, 3), $$, radius: 1.5em, fill: fill-yellow),
+
+          edge((-1.5, 2), (-1, 3), `B`, "-", label-pos: 90%),
+          node((-1, 3), $$, radius: 1.5em, fill: fill-yellow),
+
+        edge((-1, 1), (-0.5, 2), `F`, "-", label-pos: 90%),
+
+        node((-0.5, 2), $$, radius: 1.5em, fill: fill-red),
+        node((-0.75, 1.75), $$ , radius: 0.9em, fill: fill-red),
+
+      node((1, 1), $$ , radius: 1.5em, fill: fill-yellow),
+      node((0.75, 0.75), $$ , radius: 0.9em, fill: fill-yellow),
+
+        edge((1, 1), (0.5, 2), `D`, "-", label-pos: 90%),
+
+        node((0.5, 2), $$, radius: 1.5em, fill: fill-red),
+        node((0.25, 1.75), $$ , radius: 0.9em, fill: fill-red),
+
+        edge((1, 1), (1.5, 2), `E`, "-", label-pos: 90%),
+
+        node((1.5, 2), $$, radius: 1.5em, fill: fill-red),
+        node((1.25, 1.75), $$ , radius: 0.9em, fill: fill-red),
+
+      node((3, 1), $$, radius: 1.5em, fill: fill-yellow),
+      node((2.75, 0.75), $$ , radius: 0.9em, fill: fill-yellow),
+
+        edge((3, 1), (2.5, 2), `F`, "-", label-pos: 90%),
+
+        node((2.5, 2), $$, radius: 1.5em, fill: fill-red),
+        node((2.25, 1.75), $$ , radius: 0.9em, fill: fill-red),
+
+        edge((3, 1), (3.5, 2), `C`, "-", label-pos: 90%),
+
+        node((3.5, 2), $$, radius: 1.5em, fill: fill-red),
+        node((3.25, 1.75), $$ , radius: 0.9em, fill: fill-red),
+    ),
+    caption: [This tree shows the first few steps of the negamax process.],
+  )
+
+  figure(
+    diagram(
+      node-stroke: .1em,
+      spacing: 2.5em,
+      node((0, 0), $7$, radius: 1.5em, fill: fill-red),
+      node((-0.25, -0.25), $infinity$, radius: 0.9em, fill: fill-red),
+
+      edge((0, 0), (-3, 1), `D`, "-", label-pos: 90%),
+      edge((0, 0), (-1, 1), `E`, "-", label-pos: 90%),
+      edge((0, 0), (1, 1), `C`, "-", label-pos: 60%),
+      edge((0, 0), (3, 1), `F`, "-", label-pos: 80%),
+
+      edge((0, 0), (-1, 1), `E`, "-", label-pos: 90%),
+      edge((0, 0), (1, 1), `C`, "-", label-pos: 60%),
+      edge((0, 0), (3, 1), `F`, "-", label-pos: 80%),
+
+      node((-3, 1), $7$, radius: 1.5em, fill: fill-yellow),
+      node((-3.25, 0.75), $infinity$ , radius: 0.9em, fill: fill-yellow),
+
+        edge((-3, 1), (-3.5, 2), `D`, "-", label-pos: 90%),
+
+        node((-3.5, 2), $-10$, radius: 1.5em, fill: fill-red),
+        node((-3.75, 1.75), $infinity$ , radius: 0.9em, fill: fill-red),
+
+          edge((-3.5, 2), (-4, 3), `C`, "-", label-pos: 90%),
+          node((-4, 3), $10$, radius: 1.5em, fill: fill-yellow),
+
+          edge((-3.5, 2), (-3, 3), `B`, "-", label-pos: 90%),
+          node((-3, 3), $8$, radius: 1.5em, fill: fill-yellow),
+
+        edge((-3, 1), (-2.5, 2), `C`, "-", label-pos: 90%),
+
+        node((-2.5, 2), $-7$, radius: 1.5em, fill: fill-red),
+
+      node((-1, 1), $6$ , radius: 1.5em, fill: fill-yellow),
+      node((-1.25, 0.75), $-7$ , radius: 0.9em, fill: fill-yellow),
+
+        edge((-1, 1), (-1.5, 2), `D`, "-", label-pos: 90%),
+
+        node((-1.5, 2), $-6$, radius: 1.5em, fill: fill-red),
+        node((-1.75, 1.75), $infinity$ , radius: 0.9em, fill: fill-red),
+
+          edge((-1.5, 2), (-2, 3), `C`, "-", label-pos: 90%),
+          node((-2, 3), $6$, radius: 1.5em, fill: fill-yellow),
+
+          edge((-1.5, 2), (-1, 3), `B`, "-", label-pos: 90%),
+          node((-1, 3), $5$, radius: 1.5em, fill: fill-yellow),
+
+        edge((-1, 1), (-0.5, 2), `A`, "-X-", label-pos: 90%),
+
+        node((-0.5, 2), $$, radius: 1.5em, fill: fill-red),
+
+      node((1, 1), $$ , radius: 1.5em, fill: fill-yellow),
+      node((0.75, 0.75), $$ , radius: 0.9em, fill: fill-yellow),
+
+        edge((1, 1), (0.5, 2), `D`, "-", label-pos: 90%),
+
+        node((0.5, 2), $$, radius: 1.5em, fill: fill-red),
+        node((0.25, 1.75), $$ , radius: 0.9em, fill: fill-red),
+
+          edge((0.5, 2), (0, 3), `D`, "-", label-pos: 90%),
+          node((0, 3), $$, radius: 1.5em, fill: fill-yellow),
+
+          edge((0.5, 2), (1, 3), `E`, "-", label-pos: 90%),
+          node((1, 3), $$ , radius: 1.5em, fill: fill-yellow),
+
+        edge((1, 1), (1.5, 2), `E`, "-", label-pos: 90%),
+
+        node((1.5, 2), $$, radius: 1.5em, fill: fill-red),
+
+      node((3, 1), $$, radius: 1.5em, fill: fill-yellow),
+      node((2.75, 0.75), $$ , radius: 0.9em, fill: fill-yellow),
+
+        edge((3, 1), (2.5, 2), `F`, "-", label-pos: 90%),
+
+        node((2.5, 2), $$, radius: 1.5em, fill: fill-red),
+
+        edge((3, 1), (3.5, 2), `C`, "-", label-pos: 90%),
+
+        node((3.5, 2), $$, radius: 1.5em, fill: fill-red),
+    ),
+    caption: [Continuation of the process of the previous tree. Here we have
+    pruned the marked branch, due to the updated $alpha$ being greater than
+    registered $beta$.],
+  )
+}
+The previous tree continues being searched, but we stop our illustration there.
+Note that even though we have the whole tree mapped out, _a priori_ we do not
+know where the branches will end.
+== Implementation
+Although the recursive solution to this problem is almost trivial by the
+construction of the problem, setting up an iterative solution brings some
+benefits to it. For example, one has complete control over the size of the
+stack, the size of the nodes, and parallelizing the process becomes much easier.
+
+For the search tree, we will be using the following `struct` to keep track of
+the information at each node:
+
+#figure(
+  ```cpp
+  struct C4Node {
+    Position pos;
+    int16_t alpha, beta;
+    uint8_t depth;
+    uint8_t move_index;
+    Bitboard moves;
+    uint8_t move_count;
+    int16_t best_score;
+    Bitboard best_move;
+  };
+  ```,
+  caption: [Data structure for search tree],
+)
+Given this definition, we provide a pseudocode of the implementation of our iterative search.
+
+#algorithm-figure(
+  "Iterative Negamax with Alpha-Beta pruning",
+  vstroke: .5pt + luma(200),
+  {
+    import algorithmic: *
+    Procedure(
+      "Negamax",
+      ("P", $alpha$, $beta$, "D"),
+      {
+        Assign[s][Stack\<C4Node\>]
+        Assign[s][push(C4Node(P, alpha, beta, ...))]
+        LineBreak
+        While(
+          [!s.empty()],
+          {
+            Assign[curr][s.top()]
+            IfElseChain(
+              [is_terminal(curr) || curr.depth == D],
+              {
+                IfElseChain(
+                  [no_moves],
+                  {
+                    Comment[If no moves are available, then this position is lost]
+                    Assign[score][-32000]
+                  },
+                  [depth == 42],
+                  {
+                    Comment[If position is full]
+                    Assign[score][0]
+                  },
+                  [curr.depth == max_depth],
+                  {
+                    Assign[score][heuristic(P)]
+                  },
+                )
+
+                Assign[root_move][curr.best_move]
+                Assign([s], FnInline[pop][])
+
+                If([s.empty()], {
+                  Return[root_move]
+                })
+                Assign[C4Node parent][s.top()]
+                Assign[score][-score]
+
+                Comment[Beta cutoff]
+                If(
+                  [parent.alpha >= parent.beta],
+                  {
+                    If([s.empty()], Return[parent.best_move])
+                  },
+                  LineComment(Assign[s.top().move_index][7], [forces search of this tree branch to end]),
+                )
+              },
+            )
+          },
+        )
+        LineComment(Assign[moves][Array\<Bitboard\>], [Ordered moves])
+
+        LineComment(Assign[s][push(child)], [Push position with the next move])
+        Return[*null*]
+      },
+    )
+  },
+)
+
+= Application Usage
+== Compilation
+We have separated the application in 7 header files and 6 source files. To
+compile, one can either use the makefile contianed in the source folder, or
+manually include all source files. For the former, simply use
+#figure(
+  ```sh
+  make c4 && ./c4
+  ```,
+)
+For the latter compilation, use
+#figure(
+  ```sh
+  g++ main.cpp bitboard.cpp position.cpp evaluate.cpp search.cpp movegen.cpp -o c4 && ./c4
+  ```,
+)
+After executing the binary, the user will be greeted with the following command
+line interface:
+#figure(
+  ```
+  +---+---+---+---+---+---+---+
+  |   |   |   |   |   |   |   | 6
+  +---+---+---+---+---+---+---+
+  |   |   |   |   |   |   |   | 5
+  +---+---+---+---+---+---+---+
+  |   |   |   |   |   |   |   | 4
+  +---+---+---+---+---+---+---+
+  |   |   |   |   |   |   |   | 3
+  +---+---+---+---+---+---+---+
+  |   |   |   |   |   |   |   | 2
+  +---+---+---+---+---+---+---+
+  |   |   |   |   |   |   |   | 1
+  +---+---+---+---+---+---+---+
+    a   b   c   d   e   f   g
+
+  Enter a move (column A-G).
+  ```,
+)
+
+Once the user enters a column to play, the bot will take some time to find the
+best move, and a new position is printed. For example, if we enter `D`, the
+following board will appear.
+
+#figure(
+  ```
+  +---+---+---+---+---+---+---+
+  |   |   |   |   |   |   |   | 6
+  +---+---+---+---+---+---+---+
+  |   |   |   |   |   |   |   | 5
+  +---+---+---+---+---+---+---+
+  |   |   |   |   |   |   |   | 4
+  +---+---+---+---+---+---+---+
+  |   |   |   |   |   |   |   | 3
+  +---+---+---+---+---+---+---+
+  |   |   |   | X |   |   |   | 2
+  +---+---+---+---+---+---+---+
+  |   |   |   | O |   |   |   | 1
+  +---+---+---+---+---+---+---+
+    a   b   c   d   e   f   g
+
+  Enter a move (column A-G).
+  ```,
+)
+After many moves, one can arrive to a position such as
+
+#figure(
+  ```
+  +---+---+---+---+---+---+---+
+  |   |   | X | X |   | X | O | 6
+  +---+---+---+---+---+---+---+
+  |   | O | X | O |   | O | O | 5
+  +---+---+---+---+---+---+---+
+  |   | X | X | X |   | X | X | 4
+  +---+---+---+---+---+---+---+
+  | X | X | O | O |   | X | O | 3
+  +---+---+---+---+---+---+---+
+  | O | X | O | X | X | O | O | 2
+  +---+---+---+---+---+---+---+
+  | X | O | O | O | X | O | O | 1
+  +---+---+---+---+---+---+---+
+    a   b   c   d   e   f   g
+
+  You lose!
+  ```,
+)
+With optimal strategy (which I do not possess), one can most likely beat the
+heuristic function, as we do move first.
+
+= Possible Improvements
+== Transposition tables
+Transposition tables are hash tables that store previously explored positions
+together with their evaluation. One flaw (or inefficiency) of the negamax
+algorithm is that once a move is played, it loses memory of what it had already
+calculated. This is problematic, as we are wasting computational time on
+positions we already had the solution to. Thus, additional storage can be used
+to prevent calculations. To store them, one needs to hash the positions. A map
+suggested by @PPons is doing position + mask + bottom, where position are the
+bits for one of the players, mask is bits for both players, and bottom is a
+mask of the first row. 
+== Iterative deepening
+This technique consists in exploring at a shallow depth, then iteratively
+exploring deeper. This allows possible shallow victories, but also the pruning
+process becomes more efficient.
+
+Further improvements can be found in @PPons.
