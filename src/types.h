@@ -2,9 +2,12 @@
 
 #include <cstdint>
 
+namespace ConnectFour {
+
 using Bitboard = uint64_t;
 
 enum File : int8_t {
+	NO_FILE = -1,
   FILE_A,
   FILE_B,
   FILE_C,
@@ -12,7 +15,6 @@ enum File : int8_t {
   FILE_E,
   FILE_F,
   FILE_G,
-  FILE_H,
   FILE_NB
 };
 
@@ -24,11 +26,19 @@ enum Rank : int8_t {
   RANK_5,
   RANK_6,
   RANK_7,
-  RANK_8,
   RANK_NB
 };
 
-enum Piece : int8_t { NO_PIECE, BLUE, RED };
+enum Direction : int8_t {
+  NORTH = 1,
+  SOUTH = -NORTH,
+  EAST = 7,
+  WEST = -EAST,
+  NORTH_EAST = NORTH + EAST,
+  NORTH_WEST = NORTH + WEST,
+};
+
+enum Piece : int8_t { NO_PIECE, BLUE, RED, BOTH };
 
 // clang-format off
 enum Square : int8_t {
@@ -48,9 +58,14 @@ enum Square : int8_t {
 // clang-format on
 
 enum Value : int8_t {
-	BLUE_WIN = -1,
-	DRAW = 0,
-	RED_WIN = 1,
+  BLUE_WIN = -1,
+  DRAW = 0,
+  RED_WIN = 1,
+};
+
+enum Score {
+	MAX = 6 * 7,
+	MIN = -MAX
 };
 
 constexpr Rank &operator++(Rank &d) { return d = Rank(int(d) + 1); }
@@ -60,14 +75,14 @@ constexpr File &operator++(File &d) { return d = File(int(d) + 1); }
 constexpr File &operator--(File &d) { return d = File(int(d) - 1); }
 
 // only acceptable squares are in the 6x7 grid
-constexpr bool is_ok(Square s) { return s >= SQ_A1 && s <= SQ_G6; }
+constexpr bool is_ok(Square s) { return s >= SQ_A1 && s <= SQ_C6; }
 
-constexpr Square make_square(File f, Rank r) { return Square((r << 3) + f); }
+constexpr Square make_square(File f, Rank r) { return Square((f * 7) + r); }
 
 // todo: understand & 7
 constexpr File file_of(Square s) { return File(s & 7); }
 constexpr Rank rank_of(Square s) { return Rank(s >> 3); }
 
-constexpr Piece operator~(Piece p) {
-	return Piece(p ^ 3);
-}
+constexpr Piece operator~(Piece p) { return Piece(p ^ 3); }
+
+} // namespace ConnectFour

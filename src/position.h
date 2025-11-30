@@ -9,40 +9,45 @@
 namespace ConnectFour {
 class Position {
 public:
-  Position() = default;
-  Position(const Position &) = delete;
-  Position &operator=(const Position &) = delete;
-
-  void do_move(File f);
+  Position() {
+		currentPieces = 0ULL;
+		bothPieces = 0ULL;
+		ply = 0;
+	}
 
   Piece piece_on(Square s) const;
-	Piece side_to_move() const;
-
-	Value is_terminal() const;
+  bool is_valid(File f) const;
+  void play(File f);
+  void play(Bitboard move);
+  Bitboard get_current_mask() const;
+  Bitboard get_full_mask() const;
+  uint8_t get_ply() const;
 
 private:
-  std::array<Piece, SQUARE_NB> board;
-  Bitboard bluePieces = 0ULL;
-  Bitboard redPieces = 0ULL;
-  Bitboard bothPieces = 0ULL;
-  Piece sideToMove = BLUE;
+  Bitboard currentPieces;
+  Bitboard bothPieces;
+  uint8_t ply;
+
+  Bitboard winning_move_mask(Bitboard position, Bitboard mask) const;
 };
 
 std::ostream &operator<<(std::ostream &os, const Position &pos);
 
 inline Piece Position::piece_on(Square s) const {
-  assert(is_ok(s));
-  if (bluePieces & square_bb(s)) {
-    return BLUE;
-  } else if (redPieces & square_bb(s)) {
-		return RED;
+  if (bothPieces & square_bb(s)) {
+    if (ply % 2) {
+      return currentPieces & square_bb(s) ? RED : BLUE;
+    } else {
+      return currentPieces & square_bb(s) ? BLUE : RED;
+    }
   } else {
-		return NO_PIECE;
-	}
+    return NO_PIECE;
+  }
 }
 
-inline Piece Position::side_to_move() const {
-	return sideToMove;
-}
+inline Bitboard Position::get_full_mask() const { return bothPieces; }
 
+inline Bitboard Position::get_current_mask() const { return currentPieces; }
+
+inline uint8_t Position::get_ply() const { return ply; }
 } // namespace ConnectFour

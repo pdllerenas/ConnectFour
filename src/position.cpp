@@ -2,8 +2,9 @@
 #include <string>
 
 #include "position.h"
+#include "evaluate.h"
 
-constexpr std::string_view PieceToChar(" BR");
+constexpr std::string_view PieceToChar(" OX");
 
 namespace ConnectFour {
 std::ostream &operator<<(std::ostream &os, const Position &pos) {
@@ -19,54 +20,19 @@ std::ostream &operator<<(std::ostream &os, const Position &pos) {
   return os;
 }
 
-void Position::do_move(File F) {
-  Square sq = lsb(~bothPieces & file_bb(F));
-  if (sideToMove == BLUE) {
-    bluePieces |= sq;
-  } else {
-    redPieces |= sq;
-  }
-  bothPieces |= sq;
-  sideToMove = ~sideToMove;
+
+bool Position::is_valid(File F) const {
+  return (bothPieces & Rank6BB & file_bb(F)) == 0;
 }
 
-Value Position::is_terminal() const {
-  // check if blue has won horizontally
-  if (bluePieces & (bluePieces >> 1) & (bluePieces >> 2) & (bluePieces >> 3)) {
-		return BLUE_WIN;
-  }
-  // check if red has won horizontally
-  if (redPieces & (redPieces >> 1) & (redPieces >> 2) & (redPieces >> 3)) {
-		return RED_WIN;
-  }
+void Position::play(Bitboard move) {
+  currentPieces ^= bothPieces;
+  bothPieces |= move;
+  ply++;
+}
 
-  // check if blue has won vertically
-  if (bluePieces & (bluePieces >> 8) & (bluePieces >> 16) & (bluePieces >> 24)) {
-		return BLUE_WIN;
-  }
-  // check if red has won vertically
-  if (redPieces & (redPieces >> 8) & (redPieces >> 16) & (redPieces >> 24)) {
-		return RED_WIN;
-  }
-
-  // check if blue has won diagonally ( / )
-  if (bluePieces & (bluePieces >> 6) & (bluePieces >> 12) & (bluePieces >> 18)) {
-		return BLUE_WIN;
-  }
-  // check if red has won diagonally ( / )
-  if (redPieces & (redPieces >> 6) & (redPieces >> 12) & (redPieces >> 18)) {
-		return RED_WIN;
-  }
-
-  // check if blue has won diagonally ( \ )
-  if (bluePieces & (bluePieces >> 9) & (bluePieces >> 18) & (bluePieces >> 27)) {
-		return BLUE_WIN;
-  }
-  // check if red has won diagonally ( \ )
-  if (redPieces & (redPieces >> 9) & (redPieces >> 18) & (redPieces >> 27)) {
-		return RED_WIN;
-  }
-	return DRAW;
+void Position::play(File f) {
+  play((bothPieces + (Rank1BB & file_bb(f))) & file_bb(f));
 }
 
 }; // namespace ConnectFour
