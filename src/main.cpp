@@ -1,6 +1,5 @@
 #include <iostream>
 
-#include "bitboard.h"
 #include "evaluate.h"
 #include "movegen.h"
 #include "position.h"
