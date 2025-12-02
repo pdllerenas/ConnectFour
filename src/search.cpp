@@ -1,3 +1,4 @@
+#include <iostream>
 #include <stack>
 
 #include "search.h"
@@ -146,7 +147,7 @@ Bitboard Search::negamax(const Position &p, int16_t alpha, int16_t beta,
 Bitboard Search::solve(const Position &pos, int depth) {
   // If a winning move is available, dont go into negamax.
   if (Eval::can_win_next(pos)) {
-    return 1 << lsb(Eval::winning_position(pos));
+    return 1ULL << lsb(Eval::winning_position(pos) & MoveGen::possible(pos));
   }
   return negamax(pos, -32001, 32001, depth);
 }
