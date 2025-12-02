@@ -4,6 +4,8 @@
 
 namespace ConnectFour {
 
+// maybe depth is not needed, can use pos.ply, best_move logic can possibly be
+// moved to a wrapper function (solve)
 struct C4Node {
   Position pos;
   int16_t alpha, beta;
@@ -60,55 +62,55 @@ Bitboard Search::negamax(const Position &p, int16_t alpha, int16_t beta,
       C4Node &parent = s.top();
 
       // reverse sign of score, as we have popped the previous move and are now
-      // in the perspective of the other player
+      // in the perspective of the other player, and we want to maximize -score
       score = -score;
 
-			// if a better score is found, update alpha
+      // if a better score is found, update alpha
       if (score > parent.alpha) {
         parent.alpha = score;
 
-				// if parent is root node, update best move on parent node
+        // if parent is root node, update best move on parent node
         if (parent.depth == 0) {
           parent.best_move = root_move;
         }
       }
 
-			// alpha-beta cutoff
+      // alpha-beta cutoff
       if (parent.alpha >= parent.beta) {
         s.pop();
-				// if at root, return best move
+        // if at root, return best move
         if (s.empty())
           return parent.best_move;
-				// if not, force quit current branch search
+        // if not, force quit current branch search
         s.top().move_index = 7;
       }
       continue;
     }
 
-		// check if all moves have been explored
+    // check if all moves have been explored
     if (curr.move_index >= 7) {
       int16_t score = curr.alpha;
       Bitboard best_move = curr.best_move;
       s.pop();
 
-			// if we are at root, return best move
+      // if we are at root, return best move
       if (s.empty())
         return best_move;
 
       C4Node &parent = s.top();
       score = -score;
 
-			// if better score is found, update parent alpha
+      // if better score is found, update parent alpha
       if (score > parent.alpha) {
         parent.alpha = score;
 
-				// if parent is root, update best move
+        // if parent is root, update best move
         if (parent.depth == 0) {
           parent.best_move = best_move;
         }
       }
 
-			// alpha-beta cutoff
+      // alpha-beta cutoff
       if (parent.alpha >= parent.beta) {
         s.pop();
         if (s.empty())
@@ -118,16 +120,16 @@ Bitboard Search::negamax(const Position &p, int16_t alpha, int16_t beta,
       continue;
     }
 
-		// if there are still moves left and no evaluation is needed yet,
-		// explore moves in order (center first - borders last)
+    // if there are still moves left and no evaluation is needed yet,
+    // explore moves in order (center first - borders last)
     int file = MoveGen::file_order[curr.move_index++];
     Bitboard move = FilesBB[file] & curr.moves; // get move from bitboard mask
-	
-		// if file does not contain a non-losing move, skip
+
+    // if file does not contain a non-losing move, skip
     if (!move)
       continue;
 
-		// setup of next position object
+    // setup of next position object
     Position next(curr.pos);
     next.play(move);
     Bitboard next_possible = Eval::generate_non_losing_moves(next);
