@@ -392,10 +392,12 @@ not knowing the exact outcome of said position, assuming perfect play from both
 players. Refer to @peval for a detailed explanation on how evaluations are
 done.
 == Negamax
-The _negamax_ variant of minimax assumes that the score of one player is the
-negative of their own. Therefore, it becomes redundant to differentiate between
-Player 1 and Player 2, so we may only focus on maximizing the score of the
-current player's move.
+We start by noticing that, mathematically, $min(a,b) = -max(-a,-b)$. Therefore,
+minimizing the evaluations $a,b$ is equivalent to the negative of the
+maximization of $-a, -b$. Thus, the _negamax_ variant of minimax assumes that the
+score of the other player is the negative of their own. Therefore, it becomes
+redundant to differentiate between Player 1 and Player 2, so we may only focus
+on maximizing the negative scores of the current player's move.
 === Alpha-Beta pruning
 On its own, Negamax would search the whole position variation tree. However,
 this algorithm alone does not use the information from sibling nodes. That is,
