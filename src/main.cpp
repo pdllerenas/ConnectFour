@@ -1,5 +1,6 @@
 #include <iostream>
 
+#include "bitboard.h"
 #include "evaluate.h"
 #include "movegen.h"
 #include "position.h"
@@ -36,9 +37,14 @@ int main() {
     }
 
     // Bot movement
-    best_move = s.solve(p, 20);
-    if (best_move == 0) {
+    best_move = s.solve(p, 3);
+    if (best_move == Move::NULL_MOVE) {
       std::cout << "You win!" << std::endl;
+      return 0;
+    }
+    if (MoveGen::possible(p) == 0) {
+      std::cout << "Draw" << std::endl;
+      return 0;
     }
     if (Eval::is_winning_move(p, best_move)) {
       p.play(best_move);
@@ -51,6 +57,9 @@ int main() {
 
     // Updated board
     std::cout << p << std::endl;
+		char bot_file = 'A' + (lsb(best_move) / 7);
+    std::cout << "Bot played: " << bot_file << 1 + (lsb(best_move) % 7)
+              << std::endl;
   }
   return 0;
 }
