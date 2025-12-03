@@ -111,7 +111,7 @@ bool can_win_next(const Position &pos) {
 bool opponent_can_win_next(const Position &pos) {
 	Position cp(pos);
 	cp.play(0ULL);
-  return winning_position(pos) & possible(pos);
+  return winning_position(cp) & possible(cp);
 }
 
 int position_score(const Position &pos) {
