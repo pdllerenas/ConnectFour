@@ -31,6 +31,10 @@ Bitboard Search::negamax(const Position &p, int16_t alpha, int16_t beta,
 
   Bitboard possible = Eval::generate_non_losing_moves(p);
 
+	if (possible == 0) {
+		return Move::NULL_MOVE;
+	}
+
   // root node
   C4Node node(p, alpha, beta, 0, 0, possible,
               static_cast<uint8_t>(popcount(possible)), -32000, 0ULL);
