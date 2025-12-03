@@ -15,6 +15,13 @@ int main() {
   Bitboard best_move;
   char file;
 
+  unsigned int depth = 0; // TODO: fix even depth
+  while (depth > 10 || depth < 1) {
+    std::cout << "Enter a difficulty: 1 - 10" << std::endl;
+    std::cin >> depth;
+  }
+  depth *= 2;
+  depth++;
   std::cout << p << std::endl;
 
   while (true) {
@@ -30,6 +37,12 @@ int main() {
     }
     File f = File(file_ch);
     if (p.is_valid(f)) {
+      if (Eval::is_winning_move(p, f)) {
+        p.play(f);
+        std::cout << p << std::endl;
+        std::cout << "You win!" << std::endl;
+        return 0;
+      }
       p.play(f);
     } else {
       std::cout << "Cannot play this column." << std::endl;
@@ -37,16 +50,18 @@ int main() {
     }
 
     // Bot movement
-    best_move = s.solve(p, 3);
+    best_move = s.solve(p, depth);
     if (best_move == Move::NULL_MOVE) {
-      std::cout << "You win!" << std::endl;
-      return 0;
-    }
-    if (MoveGen::possible(p) == 0) {
+      p.play(1ULL << lsb(MoveGen::possible(p)));
+      std::cout << p << std::endl;
+      char bot_file = 'A' + (lsb(MoveGen::possible(p)) / 7);
+      std::cout << "Bot played: " << bot_file << 1 + (lsb(MoveGen::possible(p)) % 7)
+                << std::endl;
+      continue;
+    } else if (MoveGen::possible(p) == 0) {
       std::cout << "Draw" << std::endl;
       return 0;
-    }
-    if (Eval::is_winning_move(p, best_move)) {
+    } else if (Eval::is_winning_move(p, best_move)) {
       p.play(best_move);
       std::cout << p << std::endl;
       std::cout << "You lose!" << std::endl;
@@ -57,7 +72,7 @@ int main() {
 
     // Updated board
     std::cout << p << std::endl;
-		char bot_file = 'A' + (lsb(best_move) / 7);
+    char bot_file = 'A' + (lsb(best_move) / 7);
     std::cout << "Bot played: " << bot_file << 1 + (lsb(best_move) % 7)
               << std::endl;
   }
