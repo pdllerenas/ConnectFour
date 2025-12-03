@@ -75,10 +75,13 @@ Bitboard opponent_winning_position(const Position &pos) {
                            pos.get_full_mask());
 }
 
+// returns available bitboard squares for a chip
 Bitboard possible(const Position &pos) {
   return (pos.get_full_mask() + Rank1BB) & FULL_BOARD;
 }
 
+// generates the moves which do not lose. This does not account for winning
+// moves, so it must be used after checking for  awinning position
 Bitboard generate_non_losing_moves(const Position &pos) {
   Bitboard possible_mask = possible(pos);
   Bitboard opponent_win = opponent_winning_position(pos);
@@ -101,12 +104,13 @@ bool is_winning_move(const Position &pos, Bitboard bb) {
   return winning_position(pos) & possible(pos) & bb;
 }
 
-int move_score(const Position &pos, Bitboard move) {
-  return popcount(
-      winning_move_mask(pos.get_current_mask() | move, pos.get_full_mask()));
+bool can_win_next(const Position &pos) {
+  return winning_position(pos) & possible(pos);
 }
 
-bool can_win_next(const Position &pos) {
+bool opponent_can_win_next(const Position &pos) {
+	Position cp(pos);
+	cp.play(0ULL);
   return winning_position(pos) & possible(pos);
 }
 
@@ -114,6 +118,9 @@ int position_score(const Position &pos) {
   if (can_win_next(pos)) {
     return 32000;
   }
+	if (opponent_can_win_next(pos)) {
+		return -32000;
+	}
   int own_threes =
       popcount(winning_move_mask(pos.get_current_mask(), pos.get_full_mask()));
   int opp_threes = popcount(winning_move_mask(
