@@ -117,8 +117,9 @@ Bitboard Search::negamax(const Position &p, int16_t alpha, int16_t beta,
         if (s.empty())
           return parent.best_move;
         s.top().move_index = 7;
+        continue;
       }
-      continue;
+			continue;
     }
 
     // if there are still moves left and no evaluation is needed yet,
