@@ -84,8 +84,8 @@ Bitboard Search::negamax(const Position &p, int16_t alpha, int16_t beta,
           return parent.best_move;
         // if not, force quit current branch search
         s.top().move_index = 7;
+        continue;
       }
-      continue;
     }
 
     // check if all moves have been explored
@@ -141,7 +141,7 @@ Bitboard Search::negamax(const Position &p, int16_t alpha, int16_t beta,
     s.push(child);
   }
 
-  return 0ULL;
+  return Move::NULL_MOVE;
 }
 
 Bitboard Search::solve(const Position &pos, int depth) {
