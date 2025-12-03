@@ -74,10 +74,8 @@ constexpr Bitboard operator|(Square s1, Square s2) {
 }
 
 constexpr Bitboard rank_bb(Rank r) { return Rank1BB << r; }
-constexpr Bitboard rank_bb(Square s) { return rank_bb(rank_of(s)); }
 
 constexpr Bitboard file_bb(File f) { return FileABB << (7 * f); }
-constexpr Bitboard file_bb(Square s) { return file_bb(file_of(s)); }
 
 // counts the number of non-zero bits in a bitboard
 inline int popcount(Bitboard b) { return __builtin_popcountll(b); }
