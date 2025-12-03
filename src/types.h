@@ -6,8 +6,12 @@ namespace ConnectFour {
 
 using Bitboard = uint64_t;
 
+enum Move {
+	NULL_MOVE = 1ULL << 63,
+};
+
 enum File : int8_t {
-	NO_FILE = -1,
+  NO_FILE = -1,
   FILE_A,
   FILE_B,
   FILE_C,
@@ -57,32 +61,12 @@ enum Square : int8_t {
 };
 // clang-format on
 
-enum Value : int8_t {
-  BLUE_WIN = -1,
-  DRAW = 0,
-  RED_WIN = 1,
-};
-
-enum Score {
-	MAX = 6 * 7,
-	MIN = -MAX
-};
-
 constexpr Rank &operator++(Rank &d) { return d = Rank(int(d) + 1); }
 constexpr Rank &operator--(Rank &d) { return d = Rank(int(d) - 1); }
 
 constexpr File &operator++(File &d) { return d = File(int(d) + 1); }
 constexpr File &operator--(File &d) { return d = File(int(d) - 1); }
 
-// only acceptable squares are in the 6x7 grid
-constexpr bool is_ok(Square s) { return s >= SQ_A1 && s <= SQ_C6; }
-
 constexpr Square make_square(File f, Rank r) { return Square((f * 7) + r); }
-
-// todo: understand & 7
-constexpr File file_of(Square s) { return File(s & 7); }
-constexpr Rank rank_of(Square s) { return Rank(s >> 3); }
-
-constexpr Piece operator~(Piece p) { return Piece(p ^ 3); }
 
 } // namespace ConnectFour
