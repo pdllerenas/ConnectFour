@@ -1,7 +1,5 @@
 #pragma once
 
-#include <cassert>
-
 #include "bitboard.h"
 #include "position.h"
 
