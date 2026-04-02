@@ -27,6 +27,7 @@ int main() {
   while (true) {
     if (MoveGen::possible(p) == 0) {
       std::cout << "Draw" << std::endl;
+			return 0;
     }
     std::cout << "Enter a move (column A-G)." << std::endl;
     std::cin >> file;

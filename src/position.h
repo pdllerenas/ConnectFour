@@ -10,11 +10,20 @@ namespace ConnectFour {
 class Position {
 public:
   Position() {
-		currentPieces = 0ULL;
-		bothPieces = 0ULL;
-		ply = 0;
-	}
+    currentPieces = 0ULL;
+    bothPieces = 0ULL;
+    ply = 0;
+  }
 
+  uint64_t key() const {
+    // We use a pseudo-random constant (the golden ratio) to mix the two
+    // bitboards. This guarantees no collisions for any valid Connect Four
+    // position.
+    uint64_t hashing_constant = 0x9e3779b97f4a7c15ULL;
+
+    // Replace these with your actual internal Bitboard variables
+    return currentPieces ^ (bothPieces + hashing_constant);
+  }
   Piece piece_on(Square s) const;
   bool is_valid(File f) const;
   void play(File f);

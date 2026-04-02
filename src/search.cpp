@@ -1,159 +1,156 @@
-#include <iostream>
-#include <stack>
-
 #include "search.h"
 
 namespace ConnectFour {
 
-// maybe depth is not needed, can use pos.ply, best_move logic can possibly be
-// moved to a wrapper function (solve)
-struct C4Node {
-  Position pos;
-  int16_t alpha, beta;
-  uint8_t depth;
-  uint8_t move_index;
-  Bitboard moves;
-  uint8_t move_count;
-  int16_t best_score;
-  Bitboard best_move;
+TranspositionTable TT(64);
 
-  C4Node(Position p, int16_t alpha, int16_t beta, uint8_t depth,
-         uint8_t move_index, Bitboard moves, uint8_t move_count,
-         int16_t best_score, Bitboard best_move)
-      : pos(p), alpha(alpha), beta(beta), depth(depth), move_index(move_index),
-        moves(moves), move_count(move_count), best_score(best_score),
-        best_move(best_move) {}
-};
-
-Bitboard Search::negamax(const Position &p, int16_t alpha, int16_t beta,
-                         uint8_t max_depth) {
-  std::stack<C4Node> s;
-
-  Bitboard possible = Eval::generate_non_losing_moves(p);
-
-	if (possible == 0) {
-		return Move::NULL_MOVE;
-	}
-
-  // root node
-  C4Node node(p, alpha, beta, 0, 0, possible,
-              static_cast<uint8_t>(popcount(possible)), -32000, 0ULL);
-  s.push(node);
-
-  while (!s.empty()) {
-    // reference to most recently added node
-    C4Node &curr = s.top();
-
-    if (curr.depth == max_depth || curr.moves == 0 || curr.depth == 42) {
-      int16_t score;
-
-      if (curr.moves == 0) {
-        score = -32000;
-      } else if (curr.depth == 42) {
-        score = 0;
-      } else {
-        score = Eval::position_score(curr.pos);
-      }
-
-      // origin move so we can return it when the best score is found
-      Bitboard root_move = curr.best_move;
-      s.pop();
-
-      // if we are done searching the tree, return best move
-      if (s.empty())
-        return root_move;
-
-      // reference to parent of recently deleted node
-      C4Node &parent = s.top();
-
-      // reverse sign of score, as we have popped the previous move and are now
-      // in the perspective of the other player, and we want to maximize -score
-      score = -score;
-
-      // if a better score is found, update alpha
-      if (score > parent.alpha) {
-        parent.alpha = score;
-
-        // if parent is root node, update best move on parent node
-        if (parent.depth == 0) {
-          parent.best_move = root_move;
-        }
-      }
-
-      // alpha-beta cutoff
-      if (parent.alpha >= parent.beta) {
-        s.pop();
-        // if at root, return best move
-        if (s.empty())
-          return parent.best_move;
-        // if not, force quit current branch search
-        s.top().move_index = 7;
-        continue;
-      }
-    }
-
-    // check if all moves have been explored
-    if (curr.move_index >= 7) {
-      int16_t score = curr.alpha;
-      Bitboard best_move = curr.best_move;
-      s.pop();
-
-      // if we are at root, return best move
-      if (s.empty())
-        return best_move;
-
-      C4Node &parent = s.top();
-      score = -score;
-
-      // if better score is found, update parent alpha
-      if (score > parent.alpha) {
-        parent.alpha = score;
-
-        // if parent is root, update best move
-        if (parent.depth == 0) {
-          parent.best_move = best_move;
-        }
-      }
-
-      // alpha-beta cutoff
-      if (parent.alpha >= parent.beta) {
-        s.pop();
-        if (s.empty())
-          return parent.best_move;
-        s.top().move_index = 7;
-        continue;
-      }
-			continue;
-    }
-
-    // if there are still moves left and no evaluation is needed yet,
-    // explore moves in order (center first - borders last)
-    int file = MoveGen::file_order[curr.move_index++];
-    Bitboard move = FilesBB[file] & curr.moves; // get move from bitboard mask
-
-    // if file does not contain a non-losing move, skip
-    if (!move)
-      continue;
-
-    // setup of next position object
-    Position next(curr.pos);
-    next.play(move);
-    Bitboard next_possible = Eval::generate_non_losing_moves(next);
-
-    C4Node child(next, -curr.beta, -curr.alpha, curr.depth + 1, 0,
-                 next_possible, static_cast<uint8_t>(popcount(next_possible)),
-                 -32000, move);
-    s.push(child);
+int16_t Search::negamax_recursive(Position &pos, int16_t alpha, int16_t beta,
+                                  uint8_t depth) {
+  if (Eval::can_win_next(pos)) {
+    return 32000 - depth; // Positive score relative to the current player
   }
 
-  return Move::NULL_MOVE;
+  if (depth == 0) {
+    return Eval::position_score(pos);
+  }
+
+  uint64_t pos_key =
+      pos.key();
+  TTEntry tt_entry;
+  int16_t original_alpha =
+      alpha; // Remember original alpha to determine TT flag later
+  Bitboard tt_best_move = Move::NULL_MOVE;
+
+  if (TT.probe(pos_key, tt_entry)) {
+    tt_best_move = tt_entry.best_move;
+    if (tt_entry.depth >= depth) {
+      if (tt_entry.flag == TT_EXACT) {
+        return tt_entry.score;
+      } else if (tt_entry.flag == TT_LOWERBOUND) {
+        alpha = std::max(alpha, tt_entry.score);
+      } else if (tt_entry.flag == TT_UPPERBOUND) {
+        beta = std::min(beta, tt_entry.score);
+      }
+
+      if (alpha >= beta) {
+        return tt_entry.score; // Cutoff
+      }
+    }
+  }
+
+  Bitboard moves = MoveGen::possible(pos);
+  if (!moves)
+    return 0;
+
+  Bitboard best_move = Move::NULL_MOVE;
+  int16_t best_score = -32001;
+
+  if (tt_best_move != Move::NULL_MOVE) {
+    Position next_pos = pos;
+    next_pos.play(tt_best_move);
+    int16_t score = -negamax_recursive(next_pos, -beta, -alpha, depth - 1);
+
+    if (score > best_score) {
+      best_score = score;
+      best_move = tt_best_move;
+    }
+    alpha = std::max(alpha, score);
+    // If the TT move was good enough, we may cut off
+    if (alpha >= beta) {
+      TT.store(pos_key, best_score, depth, TT_LOWERBOUND, best_move);
+      return best_score;
+    }
+  }
+
+  for (int i = 0; i < 7; ++i) {
+    int file = MoveGen::file_order[i];
+    Bitboard move = FilesBB[file] & moves;
+    if (!move || move == tt_best_move)
+      continue;
+
+    Position next_pos = pos;
+    next_pos.play(move);
+
+    int16_t score = -negamax_recursive(next_pos, -beta, -alpha, depth - 1);
+
+    if (score > best_score) {
+      best_score = score;
+      best_move = move;
+    }
+
+    alpha = std::max(alpha, score);
+    if (alpha >= beta) {
+      break; // Alpha-beta cutoff
+    }
+  }
+
+  TTFlag flag = TT_EXACT;
+  if (best_score <= original_alpha) {
+    flag = TT_UPPERBOUND; // Failed low
+  } else if (best_score >= beta) {
+    flag = TT_LOWERBOUND; // Failed high
+  }
+
+  TT.store(pos_key, best_score, depth, flag, best_move);
+
+  return best_score;
 }
 
-Bitboard Search::solve(const Position &pos, int depth) {
-  // If a winning move is available, dont go into negamax.
+Bitboard Search::solve(const Position &pos, int target_depth) {
   if (Eval::can_win_next(pos)) {
     return 1ULL << lsb(Eval::winning_position(pos) & MoveGen::possible(pos));
   }
-  return negamax(pos, -32001, 32001, depth);
+
+  Bitboard absolute_best_move = Move::NULL_MOVE;
+
+  for (int current_depth = 1; current_depth <= target_depth; ++current_depth) {
+    int16_t alpha = -32001;
+    int16_t beta = 32001;
+    Bitboard best_root_move = Move::NULL_MOVE;
+    int16_t best_score = -32001;
+
+    Bitboard moves = MoveGen::possible(pos);
+
+    if (absolute_best_move != Move::NULL_MOVE) {
+      Position next_pos = pos;
+      next_pos.play(absolute_best_move);
+      int16_t score =
+          -negamax_recursive(next_pos, -beta, -alpha, current_depth - 1);
+
+      if (score > best_score) {
+        best_score = score;
+        best_root_move = absolute_best_move;
+      }
+      alpha = std::max(alpha, score);
+    }
+
+    for (int i = 0; i < 7; ++i) {
+      int file = MoveGen::file_order[i];
+      Bitboard move = FilesBB[file] & moves;
+
+      if (!move || move == absolute_best_move)
+        continue;
+
+      Position next_pos = pos;
+      next_pos.play(move);
+
+      int16_t score =
+          -negamax_recursive(next_pos, -beta, -alpha, current_depth - 1);
+
+      if (score > best_score) {
+        best_score = score;
+        best_root_move = move;
+      }
+      alpha = std::max(alpha, score);
+    }
+
+    absolute_best_move = best_root_move;
+
+    if (best_score > 30000 || best_score < -30000) {
+      break;
+    }
+  }
+
+  return absolute_best_move;
 }
 } // namespace ConnectFour

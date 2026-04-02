@@ -2,7 +2,6 @@
 #include <string>
 
 #include "position.h"
-#include "evaluate.h"
 
 constexpr std::string_view PieceToChar(" OX");
 

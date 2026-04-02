@@ -116,10 +116,10 @@ bool opponent_can_win_next(const Position &pos) {
 
 int position_score(const Position &pos) {
   if (can_win_next(pos)) {
-    return 32000;
+    return 30000;
   }
 	if (opponent_can_win_next(pos)) {
-		return -32000;
+		return -30000;
 	}
   int own_threes =
       popcount(winning_move_mask(pos.get_current_mask(), pos.get_full_mask()));
