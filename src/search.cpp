@@ -1,4 +1,3 @@
-#include <iostream>
 #include <stack>
 
 #include "search.h"
@@ -31,9 +30,9 @@ Bitboard Search::negamax(const Position &p, int16_t alpha, int16_t beta,
 
   Bitboard possible = Eval::generate_non_losing_moves(p);
 
-	if (possible == 0) {
-		return Move::NULL_MOVE;
-	}
+  if (possible == 0) {
+    return Move::NULL_MOVE;
+  }
 
   // root node
   C4Node node(p, alpha, beta, 0, 0, possible,
@@ -41,12 +40,10 @@ Bitboard Search::negamax(const Position &p, int16_t alpha, int16_t beta,
   s.push(node);
 
   while (!s.empty()) {
-    // reference to most recently added node
     C4Node &curr = s.top();
 
     if (curr.depth == max_depth || curr.moves == 0 || curr.depth == 42) {
       int16_t score;
-
       if (curr.moves == 0) {
         score = -32000;
       } else if (curr.depth == 42) {
@@ -55,97 +52,77 @@ Bitboard Search::negamax(const Position &p, int16_t alpha, int16_t beta,
         score = Eval::position_score(curr.pos);
       }
 
-      // origin move so we can return it when the best score is found
-      Bitboard root_move = curr.best_move;
       s.pop();
 
-      // if we are done searching the tree, return best move
       if (s.empty())
-        return root_move;
+        return Move::NULL_MOVE;
 
-      // reference to parent of recently deleted node
       C4Node &parent = s.top();
-
-      // reverse sign of score, as we have popped the previous move and are now
-      // in the perspective of the other player, and we want to maximize -score
       score = -score;
 
-      // if a better score is found, update alpha
+      int prev_file = MoveGen::file_order[parent.move_index - 1];
+      Bitboard move_evaluated = FilesBB[prev_file] & parent.moves;
+
+      if (score > parent.best_score) {
+        parent.best_score = score;
+        parent.best_move = move_evaluated;
+      }
+
       if (score > parent.alpha) {
         parent.alpha = score;
-
-        // if parent is root node, update best move on parent node
-        if (parent.depth == 0) {
-          parent.best_move = root_move;
-        }
       }
 
-      // alpha-beta cutoff
       if (parent.alpha >= parent.beta) {
-        s.pop();
-        // if at root, return best move
-        if (s.empty())
-          return parent.best_move;
-        // if not, force quit current branch search
-        s.top().move_index = 7;
-        continue;
+        parent.move_index = 7; // Prune remaining siblings
       }
+      continue;
     }
 
-    // check if all moves have been explored
     if (curr.move_index >= 7) {
-      int16_t score = curr.alpha;
-      Bitboard best_move = curr.best_move;
+      int16_t score = curr.best_score;
+      Bitboard best_move_found = curr.best_move;
+
       s.pop();
 
-      // if we are at root, return best move
       if (s.empty())
-        return best_move;
+        return best_move_found;
 
       C4Node &parent = s.top();
       score = -score;
 
-      // if better score is found, update parent alpha
+      int prev_file = MoveGen::file_order[parent.move_index - 1];
+      Bitboard move_evaluated = FilesBB[prev_file] & parent.moves;
+
+      if (score > parent.best_score) {
+        parent.best_score = score;
+        parent.best_move = move_evaluated;
+      }
+
       if (score > parent.alpha) {
         parent.alpha = score;
-
-        // if parent is root, update best move
-        if (parent.depth == 0) {
-          parent.best_move = best_move;
-        }
       }
 
-      // alpha-beta cutoff
       if (parent.alpha >= parent.beta) {
-        s.pop();
-        if (s.empty())
-          return parent.best_move;
-        s.top().move_index = 7;
-        continue;
+        parent.move_index = 7; // Prune remaining siblings
       }
-			continue;
+      continue;
     }
 
-    // if there are still moves left and no evaluation is needed yet,
-    // explore moves in order (center first - borders last)
     int file = MoveGen::file_order[curr.move_index++];
-    Bitboard move = FilesBB[file] & curr.moves; // get move from bitboard mask
+    Bitboard move = FilesBB[file] & curr.moves;
 
-    // if file does not contain a non-losing move, skip
     if (!move)
       continue;
 
-    // setup of next position object
     Position next(curr.pos);
     next.play(move);
     Bitboard next_possible = Eval::generate_non_losing_moves(next);
 
     C4Node child(next, -curr.beta, -curr.alpha, curr.depth + 1, 0,
                  next_possible, static_cast<uint8_t>(popcount(next_possible)),
-                 -32000, move);
+                 -32000, 0ULL);
     s.push(child);
   }
-
   return Move::NULL_MOVE;
 }
 
